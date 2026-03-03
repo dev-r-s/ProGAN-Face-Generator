@@ -1,0 +1,80 @@
+<svg width="1100" height="650" xmlns="http://www.w3.org/2000/svg">
+
+  <style>
+    .gen { fill:#111827; stroke:#3b82f6; stroke-width:2; rx:10; }
+    .disc { fill:#111827; stroke:#f59e0b; stroke-width:2; rx:10; }
+    .text { fill:white; font-family:Arial; font-size:14px; }
+    .title { fill:#e5e7eb; font-family:Arial; font-size:22px; font-weight:bold; }
+    .arrow { stroke:white; stroke-width:2; marker-end:url(#arrow); }
+  </style>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7"
+      refX="0" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="white" />
+    </marker>
+  </defs>
+
+  <text x="350" y="40" class="title">
+    Progressive GAN (512×512) – Code-Accurate Architecture
+  </text>
+
+  <!-- Generator -->
+  <text x="150" y="90" class="text">Generator</text>
+
+  <rect x="80" y="120" width="200" height="60" class="gen"/>
+  <text x="110" y="155" class="text">Latent z (512)</text>
+
+  <rect x="330" y="120" width="230" height="60" class="gen"/>
+  <text x="350" y="145" class="text">4×4 Initial Block</text>
+  <text x="350" y="165" class="text">EqualizedConv2d + PixelNorm</text>
+
+  <rect x="630" y="90" width="250" height="120" class="gen"/>
+  <text x="660" y="120" class="text">Progressive Blocks</text>
+  <text x="660" y="145" class="text">Upsample (nearest)</text>
+  <text x="660" y="165" class="text">EqualizedConv2d</text>
+  <text x="660" y="185" class="text">PixelNorm</text>
+  <text x="660" y="205" class="text">4 → 8 → ... → 512</text>
+
+  <rect x="930" y="120" width="200" height="60" class="gen"/>
+  <text x="960" y="155" class="text">ToRGB (1×1 Conv)</text>
+
+  <rect x="930" y="220" width="200" height="60" class="gen"/>
+  <text x="965" y="255" class="text">tanh Output</text>
+
+  <rect x="630" y="240" width="250" height="60" class="gen"/>
+  <text x="680" y="275" class="text">Alpha Fade-In Blending</text>
+
+  <line x1="280" y1="150" x2="330" y2="150" class="arrow"/>
+  <line x1="560" y1="150" x2="630" y2="140" class="arrow"/>
+  <line x1="880" y1="150" x2="930" y2="150" class="arrow"/>
+  <line x1="1030" y1="180" x2="1030" y2="220" class="arrow"/>
+  <line x1="755" y1="210" x2="755" y2="240" class="arrow"/>
+
+  <!-- Discriminator -->
+  <text x="150" y="380" class="text">Discriminator</text>
+
+  <rect x="930" y="420" width="200" height="60" class="disc"/>
+  <text x="965" y="455" class="text">Input Image</text>
+
+  <rect x="930" y="500" width="200" height="60" class="disc"/>
+  <text x="960" y="535" class="text">FromRGB (1×1)</text>
+
+  <rect x="630" y="470" width="250" height="120" class="disc"/>
+  <text x="660" y="500" class="text">Discriminator Blocks</text>
+  <text x="660" y="525" class="text">EqualizedConv2d</text>
+  <text x="660" y="545" class="text">AvgPool Downsample</text>
+  <text x="660" y="565" class="text">512 → ... → 4</text>
+
+  <rect x="330" y="500" width="230" height="60" class="disc"/>
+  <text x="360" y="535" class="text">MinibatchStddev</text>
+
+  <rect x="80" y="500" width="200" height="60" class="disc"/>
+  <text x="115" y="535" class="text">EqualizedLinear → 1</text>
+
+  <line x1="1030" y1="480" x2="1030" y2="500" class="arrow"/>
+  <line x1="930" y1="530" x2="880" y2="540" class="arrow"/>
+  <line x1="630" y1="540" x2="560" y2="530" class="arrow"/>
+  <line x1="330" y1="530" x2="280" y2="530" class="arrow"/>
+
+</svg>
