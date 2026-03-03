@@ -25,6 +25,41 @@ This repository implements a **Progressive Growing GAN (ProGAN)** in PyTorch, ca
 | *From 4x4 to 512x512* | *Smoothly morphing between seeds* |
 
 ---
+## 📐 Model Architecture
+graph TD
+    subgraph Generator
+        Z[Latent Vector z: 512] --> B4[4x4 Initial Block]
+        B4 --> PN1[PixelNorm]
+        PN1 --> U8[Upsample 8x8]
+        U8 --> B8[8x8 Block]
+        B8 --> PN2[PixelNorm]
+        PN2 --> UN[... Upsample to ...]
+        UN --> B512[512x512 Block]
+        B512 --> RGB[ToRGB: 1x1 Conv]
+        RGB --> Out[Generated Image]
+    end
+
+    subgraph Discriminator
+        In[Input Image] --> FRGB[FromRGB: 1x1 Conv]
+        FRGB --> DB512[512x512 Block]
+        DB512 --> DSN[... Downsample to ...]
+        DSN --> DB8[8x8 Block]
+        DB8 --> DS4[Downsample 4x4]
+        DS4 --> MSD[Minibatch Stddev]
+        MSD --> DB4[4x4 Final Block]
+        DB4 --> FC[Equalized Linear Layer]
+        FC --> RealFake[Real / Fake Decision]
+    end
+
+    style Z fill:#f9f,stroke:#333,stroke-width:2px
+    style Out fill:#00c2ff,stroke:#333,stroke-width:2px
+    style RealFake fill:#ffcc00,stroke:#333,stroke-width:2px
+    
+---
+## 🧪 Technical Deep Dive
+1. Equalized Learning RateUnlike standard GANs that use careful weight initialization, this model uses Runtime Weight Scaling. In layers.py, weights are initialized from $\mathcal{N}(0, 1)$ and scaled on every forward pass by:$$w_{scaled} = w \times \sqrt{\frac{2}{\text{fan\_in}}}$$This ensures that the dynamic range, and thus the learning speed, is the same for all layers.2. Pixelwise Feature NormalizationTo prevent the magnitudes of the features in the Generator from escalating, we normalize the feature vector in each pixel to unit length after every convolutional layer:$$b_{x,y} = a_{x,y} / \sqrt{\frac{1}{C} \sum_{j=0}^{C-1} (a_{x,y}^j)^2 + \epsilon}$$3. Minibatch Standard DeviationTo increase variation in generated images, the Discriminator computes the standard deviation of the current minibatch and adds it as an extra feature map. This encourages the Generator to produce more diverse samples.
+
+---
 
 ## 🛠️ Project Structure
 * `model.py`: Core architecture for the Generator, Discriminator, and the combined ProGAN class.
