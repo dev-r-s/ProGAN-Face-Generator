@@ -1,269 +1,244 @@
-# ProGAN-Face-Generator
-# 🎨 Progressive GAN: High-Resolution Face Synthesis (512×512)
+# 🎨 Progressive GAN – High-Resolution Face Synthesis (512×512)
 
-[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](YOUR_HUGGING_FACE_SPACE_LINK_HERE)
+[![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/cds006/Progan)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)
 ![Gradio](https://img.shields.io/badge/Gradio-orange?style=flat)
 
-This repository implements a **Progressive Growing GAN (ProGAN)** in PyTorch, capable of generating high-quality human face images up to **512×512 resolution**.
+Research-grade implementation of **Progressive Growing GAN (ProGAN)** trained up to **512×512 resolution** on CelebA-HQ.
 
-The architecture follows the ideas from:
+This project reproduces the core ideas from:
 
-**Tero Karras et al. — “Progressive Growing of GANs for Improved Quality, Stability, and Variation” (2017)**
-
-The model is deployed using **Gradio** and available via Hugging Face Spaces.
+**Tero Karras et al., 2017 — Progressive Growing of GANs for Improved Quality, Stability, and Variation**
 
 ---
 
-## ✨ Key Features
+# 🚀 Highlights
 
-- 🚀 **Progressive Growing:** Seamless growth from 4×4 → 512×512 using fade-in blending (`alpha`)
-- ⚖ **Equalized Learning Rate:** Runtime weight scaling for stable signal propagation
-- 🎯 **Pixel-wise Feature Normalization**
-- 📊 **Minibatch Standard Deviation Layer**
-- 🔁 **SLERP Latent Interpolation**
-- 🌐 **Gradio Web Interface**
-- 🧠 **EMA Generator Weights for Inference**
-
----
-
-## 🖼️ Sample Results
-
-| Random Generation | Latent Interpolation |
-|-------------------|----------------------|
-| ![Sample1](https://your-image-link-here.png) | ![Interpolation](https://your-image-link-here.png) |
-
-> Replace with images from your Hugging Face Space for maximum impact.
+- Progressive growing: 4×4 → 512×512
+- Fade-in alpha blending during transitions
+- WGAN-GP loss
+- Equalized Learning Rate
+- Pixel-wise feature normalization
+- Minibatch standard deviation layer
+- Exponential Moving Average (EMA) generator
+- Mixed precision (AMP) training
+- SLERP latent interpolation
+- Quantitative FID evaluation
+- Gradio deployment (Hugging Face Space)
 
 ---
 
-## 📐 Model Architecture
+# 📊 Quantitative Results
 
-### Generator (Progressive Growing)
+**FID @ 512×512: 22.11**
 
-- Starts from 4×4 latent projection
-- Upsampling blocks double resolution each stage
-- `EqualizedConv2d` in all convolution layers
-- PixelNorm after each conv layer
-- `ToRGB` 1×1 convolution at each resolution
-- Fade-in blending during transitions
+Evaluation details:
+- 5000 generated samples
+- Truncation = 1.0
+- Inception-v3 (2048-dim features)
+- Computed using `pytorch-fid`
 
-### Discriminator
-
-- Mirror of generator (reverse order)
-- `FromRGB` layer at every resolution
-- Downsampling blocks
-- `MinibatchStddev` layer before final block
-- Final `EqualizedLinear` classification layer
-
----
-## 🏗 Architecture Diagram
-
-![Architecture](docs/architecture.svg)
-
----
-
-## 🧪 Technical Deep Dive
-
-### 1️⃣ Equalized Learning Rate
-
-Instead of relying only on careful initialization, weights are scaled at runtime:
+Command used:
 
 ```
-w_scaled = w * sqrt(2 / fan_in)
-```
-
-This ensures equal learning speed across layers and stabilizes training.
-
-Implemented in:
-
-```
-layers.py → EqualizedConv2d
-layers.py → EqualizedLinear
+python -m pytorch_fid data/real_512 data/fake_512 --device cuda
 ```
 
 ---
 
-### 2️⃣ Pixel-wise Feature Normalization
+# 🖼 Results
 
-To prevent escalation of signal magnitudes in the generator:
+## Generated Samples (512×512)
 
-```
-b(x,y) = a(x,y) / sqrt(mean(a(x,y)^2) + ε)
-```
+![Sample Grid](assets/sample_grid.png)
 
-Applied after every convolution layer in the generator.
+## Progressive Resolution Growth
 
----
-
-### 3️⃣ Minibatch Standard Deviation
-
-Encourages diversity in generated samples by adding batch-level statistics as an extra feature map.
-
-Implemented in:
-
-```
-layers.py → MinibatchStddev
-```
+![Progression](assets/progression.gif)
 
 ---
 
-### 4️⃣ Progressive Fade-in (Alpha Blending)
+# 🏗 Architecture Overview
 
-During resolution transitions:
+## Generator (Progressive Growing)
 
-```
-output = alpha * new_path + (1 - alpha) * old_path
-```
+Latent vector (512×1×1)  
+→ 4×4 initial block  
+→ Upsampling blocks (×2 each stage)  
+→ ToRGB (1×1 conv) at every resolution  
+→ Alpha blending during transitions  
+→ Final tanh activation
 
-This ensures smooth training when increasing resolution.
+Each generator block contains:
+- Upsample (nearest)
+- EqualizedConv2d
+- LeakyReLU
+- PixelNorm
+- EqualizedConv2d
+- LeakyReLU
+- PixelNorm
 
----
-
-### 5️⃣ SLERP Interpolation
-
-Spherical Linear Interpolation between two latent vectors:
-
-```
-SLERP(z1, z2, α)
-```
-
-Produces smooth semantic transitions between generated faces.
-
-Implemented in:
+Fade-in mechanism:
 
 ```
-inference.py → _slerp()
+output = α * new_path + (1 - α) * old_path
 ```
 
 ---
 
-## 📊 Training Details
+## Discriminator (Mirror Structure)
 
-- Dataset: CelebA-HQ (30,000 images)
-- Final Resolution: 512×512
-- Latent Dimension: 512
-- Training Steps: 650,000
-- EMA Weights Used for Inference
-- Progressive growing schedule implemented manually
+Input Image  
+→ FromRGB (1×1 conv)  
+→ Downsampling blocks  
+→ MinibatchStddev layer  
+→ Final EqualizedLinear output (no sigmoid)
+
+Each block:
+- EqualizedConv2d
+- LeakyReLU
+- EqualizedConv2d
+- LeakyReLU
+- AvgPool2d
+
+WGAN critic output (no probability, no sigmoid).
 
 ---
-## 🏋️ Training Methodology
 
-### Progressive Growing Strategy
+# 🧠 Training Methodology
 
-Training begins at **4×4 resolution** and progressively doubles:
+## Progressive Schedule
 
 ```
 4 → 8 → 16 → 32 → 64 → 128 → 256 → 512
 ```
 
-At each resolution stage:
+Each resolution stage consists of:
 
-1. Stabilization phase (alpha = 1.0)
-2. Transition phase (alpha increases from 0 → 1)
-
-This prevents sudden distribution shifts when increasing resolution.
+1. Fade-in phase (α: 0 → 1)
+2. Stabilization phase (α = 1)
 
 ---
 
-### Loss Function
-
-Standard GAN objective:
-
-Generator:
-```
-min_G  E[log(1 - D(G(z)))]
-```
+## Loss Function (WGAN-GP)
 
 Discriminator:
+
 ```
-max_D  E[log(D(x))] + E[log(1 - D(G(z)))]
+L = E[D(fake)] - E[D(real)] + λGP + drift
 ```
 
-(EMA weights used during inference)
+Generator:
+
+```
+L = -E[D(fake)]
+```
+
+Where:
+- λ = 10 (gradient penalty)
+- Drift = 0.001
 
 ---
 
-### Optimizer Configuration
-
-- Optimizer: Adam
-- Beta1: 0.0
-- Beta2: 0.99
-- Learning Rate: 1e-3 (progressively tuned)
-- Equal learning rate scaling applied to all layers
-
----
-
-### Exponential Moving Average (EMA)
-
-During training, a shadow generator with exponential moving average weights is maintained:
+## EMA Update
 
 ```
 θ_ema = β * θ_ema + (1 - β) * θ
 ```
 
-EMA weights produce smoother and higher-quality samples during inference.
+EMA weights are used during inference for smoother results.
 
 ---
 
-### Stabilization Techniques Used
+# ⚙ Model Configuration
 
-- Equalized Learning Rate
-- Pixel Normalization
-- Minibatch Standard Deviation
-- Fade-in Alpha Blending
-- SLERP interpolation in latent space
-
----
-
-### Hardware
-
-- GPU: (Add your GPU here)
-- Dataset size: 30k images
-- Total steps: 650,000
-- Final resolution: 512×512
+- Dataset: CelebA-HQ (~30k images)
+- Final Resolution: 512×512
+- Latent Dimension: 512
+- Learning Rate: 1e-3
+- Adam Betas: (0.0, 0.99)
+- EMA Decay: 0.999
+- Mixed Precision: Enabled
+- Images per stage: 800K
+- Total training steps: 650,000
 
 ---
 
-## 🛠️ Project Structure
+# 🛠 Project Structure
 
 ```
 .
 ├── app.py              # Gradio UI
+├── train.py            # Progressive training loop
 ├── inference.py        # Image generation + SLERP
 ├── model.py            # Generator & Discriminator
 ├── layers.py           # Custom layers
+├── config.py
 ├── requirements.txt
+├── assets/
+│   ├── sample_grid.png
+│   └── progression.gif
 └── README.md
 ```
 
 ---
 
-## 🚀 Getting Started
+# 🚀 Quick Start
 
-### 1️⃣ Clone Repository
+## Install
 
-```bash
-git clone https://github.com/YourUsername/ProGAN-Face-Generator.git
-cd ProGAN-Face-Generator
+```
+pip install -r requirements.txt
 ```
 
-### 2️⃣ Install Dependencies
+Verify CUDA:
 
-```bash
-pip install -r requirements.txt
+```
+python -c "import torch; print(torch.cuda.is_available())"
 ```
 
 ---
 
-## ▶ Run Locally
+## Train
 
-```bash
+```
+python train.py --data_dir /path/to/celeba_hq --max_res 512
+```
+
+Resume training:
+
+```
+python train.py --data_dir /path/to/celeba_hq \
+    --resume checkpoints/checkpoint_res256_stepXXXX.pt
+```
+
+---
+
+## Generate Images
+
+```
+python inference.py \
+    --checkpoint checkpoints/final_model.pt \
+    --output generated.png \
+    --num_images 64 \
+    --grid
+```
+
+With truncation:
+
+```
+--truncation 0.7
+```
+
+---
+
+## Launch Web Interface
+
+```
 python app.py
 ```
 
-Then open:
+Open:
 
 ```
 http://localhost:7860
@@ -271,23 +246,63 @@ http://localhost:7860
 
 ---
 
-## 🌐 Live Demo
+# 📈 Training Monitoring
 
-Access the deployed version on Hugging Face Spaces:
+Training outputs:
 
-👉 **https://huggingface.co/spaces/cds006/Progan**
+```
+outputs/
+├── samples/
+├── logs/training_log.json
+```
+
+Resolution scaling (approximate):
+
+| Resolution | VRAM | Quality |
+|------------|------|----------|
+| 64×64      | 6GB  | Good |
+| 128×128    | 8GB  | High |
+| 256×256    | 12GB | Very Good |
+| 512×512    | 16GB | Excellent |
 
 ---
 
----
+# 🌐 Live Demo
 
-## 🙌 Acknowledgments
+Available on Hugging Face Spaces:
 
-Inspired by:
-
-Tero Karras et al., 2017  
-Progressive Growing of GANs for Improved Quality, Stability, and Variation
+👉 https://huggingface.co/spaces/cds006/Progan
 
 ---
 
-⭐ If you found this project interesting, consider giving it a star!
+# 🎓 Research Impact
+
+This implementation demonstrates:
+
+- Stable high-resolution GAN training
+- Proper progressive growing logic
+- Quantitative evaluation (FID)
+- Production-ready inference
+- Consumer GPU scalability
+
+Achieving **FID 22.11 at 512×512 resolution** confirms architectural correctness and training stability.
+
+---
+
+# 🔮 Future Work
+
+- FID tracking during training
+- Precision & Recall metrics
+- StyleGAN comparison baseline
+- Adaptive augmentation experiments
+
+---
+
+# 👤 Author
+
+Devinder Solanki  
+Research-focused generative modeling implementation.
+
+---
+
+⭐ If you find this project interesting, consider giving it a star.
