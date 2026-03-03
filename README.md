@@ -1,78 +1,293 @@
 # ProGAN-Face-Generator
-# 🎨 Progressive GAN: High-Resolution Face Synthesis
+# 🎨 Progressive GAN: High-Resolution Face Synthesis (512×512)
 
 [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](YOUR_HUGGING_FACE_SPACE_LINK_HERE)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)
 ![Gradio](https://img.shields.io/badge/Gradio-orange?style=flat)
 
-This repository implements a **Progressive Growing GAN (ProGAN)** in PyTorch, capable of generating high-quality images up to 512×512 resolution. The model features equalized learning rate, pixel normalization, and minibatch standard deviation for stable training.
+This repository implements a **Progressive Growing GAN (ProGAN)** in PyTorch, capable of generating high-quality human face images up to **512×512 resolution**.
+
+The architecture follows the ideas from:
+
+**Tero Karras et al. — “Progressive Growing of GANs for Improved Quality, Stability, and Variation” (2017)**
+
+The model is deployed using **Gradio** and available via Hugging Face Spaces.
 
 ---
 
 ## ✨ Key Features
-* **Progressive Growing:** Seamlessly grows from 4x4 to 512x512 resolution using smooth fade-in (`alpha` blending).
-* **Stable Training:** Implements **Equalized Learning Rate** (runtime weight scaling) for all layers.
-* **Latent Space Interpolation:** Uses **SLERP** (Spherical Linear Interpolation) for smooth transitions between generated faces.
-* **Gradio Web UI:** Includes a full-featured dashboard for random generation and morphing.
+
+- 🚀 **Progressive Growing:** Seamless growth from 4×4 → 512×512 using fade-in blending (`alpha`)
+- ⚖ **Equalized Learning Rate:** Runtime weight scaling for stable signal propagation
+- 🎯 **Pixel-wise Feature Normalization**
+- 📊 **Minibatch Standard Deviation Layer**
+- 🔁 **SLERP Latent Interpolation**
+- 🌐 **Gradio Web Interface**
+- 🧠 **EMA Generator Weights for Inference**
 
 ---
 
-## 🖼️ Visualizations
+## 🖼️ Sample Results
 
-| Resolution Progression | Latent Space Interpolation (SLERP) |
-| :--- | :--- |
-| ![Growth GIF](https://your-link-to-image.gif) | ![Morphing GIF](https://your-link-to-image.gif) |
-| *From 4x4 to 512x512* | *Smoothly morphing between seeds* |
+| Random Generation | Latent Interpolation |
+|-------------------|----------------------|
+| ![Sample1](https://your-image-link-here.png) | ![Interpolation](https://your-image-link-here.png) |
+
+> Replace with images from your Hugging Face Space for maximum impact.
 
 ---
+
 ## 📐 Model Architecture
-graph TD
-    subgraph Generator
-        Z[Latent Vector z: 512] --> B4[4x4 Initial Block]
-        B4 --> PN1[PixelNorm]
-        PN1 --> U8[Upsample 8x8]
-        U8 --> B8[8x8 Block]
-        B8 --> PN2[PixelNorm]
-        PN2 --> UN[... Upsample to ...]
-        UN --> B512[512x512 Block]
-        B512 --> RGB[ToRGB: 1x1 Conv]
-        RGB --> Out[Generated Image]
-    end
 
-    subgraph Discriminator
-        In[Input Image] --> FRGB[FromRGB: 1x1 Conv]
-        FRGB --> DB512[512x512 Block]
-        DB512 --> DSN[... Downsample to ...]
-        DSN --> DB8[8x8 Block]
-        DB8 --> DS4[Downsample 4x4]
-        DS4 --> MSD[Minibatch Stddev]
-        MSD --> DB4[4x4 Final Block]
-        DB4 --> FC[Equalized Linear Layer]
-        FC --> RealFake[Real / Fake Decision]
-    end
+### Generator (Progressive Growing)
 
-    style Z fill:#f9f,stroke:#333,stroke-width:2px
-    style Out fill:#00c2ff,stroke:#333,stroke-width:2px
-    style RealFake fill:#ffcc00,stroke:#333,stroke-width:2px
-    
+- Starts from 4×4 latent projection
+- Upsampling blocks double resolution each stage
+- `EqualizedConv2d` in all convolution layers
+- PixelNorm after each conv layer
+- `ToRGB` 1×1 convolution at each resolution
+- Fade-in blending during transitions
+
+### Discriminator
+
+- Mirror of generator (reverse order)
+- `FromRGB` layer at every resolution
+- Downsampling blocks
+- `MinibatchStddev` layer before final block
+- Final `EqualizedLinear` classification layer
+
 ---
+## 🏗 Architecture Diagram
+
+![Architecture](docs/architecture.svg)
+
+---
+
 ## 🧪 Technical Deep Dive
-1. Equalized Learning RateUnlike standard GANs that use careful weight initialization, this model uses Runtime Weight Scaling. In layers.py, weights are initialized from $\mathcal{N}(0, 1)$ and scaled on every forward pass by:$$w_{scaled} = w \times \sqrt{\frac{2}{\text{fan\_in}}}$$This ensures that the dynamic range, and thus the learning speed, is the same for all layers.2. Pixelwise Feature NormalizationTo prevent the magnitudes of the features in the Generator from escalating, we normalize the feature vector in each pixel to unit length after every convolutional layer:$$b_{x,y} = a_{x,y} / \sqrt{\frac{1}{C} \sum_{j=0}^{C-1} (a_{x,y}^j)^2 + \epsilon}$$3. Minibatch Standard DeviationTo increase variation in generated images, the Discriminator computes the standard deviation of the current minibatch and adds it as an extra feature map. This encourages the Generator to produce more diverse samples.
+
+### 1️⃣ Equalized Learning Rate
+
+Instead of relying only on careful initialization, weights are scaled at runtime:
+
+```
+w_scaled = w * sqrt(2 / fan_in)
+```
+
+This ensures equal learning speed across layers and stabilizes training.
+
+Implemented in:
+
+```
+layers.py → EqualizedConv2d
+layers.py → EqualizedLinear
+```
+
+---
+
+### 2️⃣ Pixel-wise Feature Normalization
+
+To prevent escalation of signal magnitudes in the generator:
+
+```
+b(x,y) = a(x,y) / sqrt(mean(a(x,y)^2) + ε)
+```
+
+Applied after every convolution layer in the generator.
+
+---
+
+### 3️⃣ Minibatch Standard Deviation
+
+Encourages diversity in generated samples by adding batch-level statistics as an extra feature map.
+
+Implemented in:
+
+```
+layers.py → MinibatchStddev
+```
+
+---
+
+### 4️⃣ Progressive Fade-in (Alpha Blending)
+
+During resolution transitions:
+
+```
+output = alpha * new_path + (1 - alpha) * old_path
+```
+
+This ensures smooth training when increasing resolution.
+
+---
+
+### 5️⃣ SLERP Interpolation
+
+Spherical Linear Interpolation between two latent vectors:
+
+```
+SLERP(z1, z2, α)
+```
+
+Produces smooth semantic transitions between generated faces.
+
+Implemented in:
+
+```
+inference.py → _slerp()
+```
+
+---
+
+## 📊 Training Details
+
+- Dataset: CelebA-HQ (30,000 images)
+- Final Resolution: 512×512
+- Latent Dimension: 512
+- Training Steps: 650,000
+- EMA Weights Used for Inference
+- Progressive growing schedule implemented manually
+
+---
+## 🏋️ Training Methodology
+
+### Progressive Growing Strategy
+
+Training begins at **4×4 resolution** and progressively doubles:
+
+```
+4 → 8 → 16 → 32 → 64 → 128 → 256 → 512
+```
+
+At each resolution stage:
+
+1. Stabilization phase (alpha = 1.0)
+2. Transition phase (alpha increases from 0 → 1)
+
+This prevents sudden distribution shifts when increasing resolution.
+
+---
+
+### Loss Function
+
+Standard GAN objective:
+
+Generator:
+```
+min_G  E[log(1 - D(G(z)))]
+```
+
+Discriminator:
+```
+max_D  E[log(D(x))] + E[log(1 - D(G(z)))]
+```
+
+(EMA weights used during inference)
+
+---
+
+### Optimizer Configuration
+
+- Optimizer: Adam
+- Beta1: 0.0
+- Beta2: 0.99
+- Learning Rate: 1e-3 (progressively tuned)
+- Equal learning rate scaling applied to all layers
+
+---
+
+### Exponential Moving Average (EMA)
+
+During training, a shadow generator with exponential moving average weights is maintained:
+
+```
+θ_ema = β * θ_ema + (1 - β) * θ
+```
+
+EMA weights produce smoother and higher-quality samples during inference.
+
+---
+
+### Stabilization Techniques Used
+
+- Equalized Learning Rate
+- Pixel Normalization
+- Minibatch Standard Deviation
+- Fade-in Alpha Blending
+- SLERP interpolation in latent space
+
+---
+
+### Hardware
+
+- GPU: (Add your GPU here)
+- Dataset size: 30k images
+- Total steps: 650,000
+- Final resolution: 512×512
 
 ---
 
 ## 🛠️ Project Structure
-* `model.py`: Core architecture for the Generator, Discriminator, and the combined ProGAN class.
-* `layers.py`: Custom implementations of `EqualizedConv2d`, `PixelNorm`, and `MinibatchStddev`.
-* `inference.py`: Helper class for generating images and performing latent space walks.
-* `app.py`: The Gradio interface for interacting with the model.
+
+```
+.
+├── app.py              # Gradio UI
+├── inference.py        # Image generation + SLERP
+├── model.py            # Generator & Discriminator
+├── layers.py           # Custom layers
+├── requirements.txt
+└── README.md
+```
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Installation
+### 1️⃣ Clone Repository
+
 ```bash
-git clone [https://github.com/YourUsername/ProGAN-Face-Gen.git](https://github.com/YourUsername/ProGAN-Face-Gen.git)
-cd ProGAN-Face-Gen
+git clone https://github.com/YourUsername/ProGAN-Face-Generator.git
+cd ProGAN-Face-Generator
+```
+
+### 2️⃣ Install Dependencies
+
+```bash
 pip install -r requirements.txt
+```
+
+---
+
+## ▶ Run Locally
+
+```bash
+python app.py
+```
+
+Then open:
+
+```
+http://localhost:7860
+```
+
+---
+
+## 🌐 Live Demo
+
+Access the deployed version on Hugging Face Spaces:
+
+👉 **https://huggingface.co/spaces/cds006/Progan**
+
+---
+
+---
+
+## 🙌 Acknowledgments
+
+Inspired by:
+
+Tero Karras et al., 2017  
+Progressive Growing of GANs for Improved Quality, Stability, and Variation
+
+---
+
+⭐ If you found this project interesting, consider giving it a star!
