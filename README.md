@@ -54,7 +54,7 @@ python -m pytorch_fid data/real_512 data/fake_512 --device cuda
 
 ## Progressive Resolution Growth
 
-![Progression](assets/progression.gif)
+![Progression](assets/resolution_progression.png)
 
 ---
 
